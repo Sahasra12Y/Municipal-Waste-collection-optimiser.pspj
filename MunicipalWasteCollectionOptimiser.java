@@ -1,472 +1,222 @@
-import java.util.Scanner;
+import java.io.*;
+import java.util.*;
 
-public class MunicipalWasteCollectionOptimiser {
+class WasteBin {
+    private String area;
+    private int waste;
+    private boolean collected;
 
-    // Maximum number of bins
-    static final int MAX_BINS = 10;
-
-    // Bin information
-    static String[] binId = new String[MAX_BINS];
-    static String[] zone = new String[MAX_BINS];
-    static String[] type = new String[MAX_BINS];
-
-    static double[] capacity = new double[MAX_BINS];
-    static double[] fillLevel = new double[MAX_BINS];
-
-    // Distance matrix between bins
-    static double[][] distance = new double[MAX_BINS][MAX_BINS];
-
-    static int binCount = 0;
-
-    // Truck capacity
-    static double truckCapacity = 1000.0;
-
-    // Collection statistics
-    static double totalCollected = 0;
-    static double recyclingCollected = 0;
-    static double landfillCollected = 0;
-
-    static Scanner scanner = new Scanner(System.in);
-
-    public static void main(String[] args) {
-
-        createSampleBins();
-        createDistanceMatrix();
-
-        int choice;
-
-        do {
-            System.out.println("\n====================================");
-            System.out.println("       MUNICIPAL WASTE AUTHORITY");
-            System.out.println("====================================");
-            System.out.println("1) Update fills");
-            System.out.println("2) Build route");
-            System.out.println("3) Collect");
-            System.out.println("4) Report");
-            System.out.println("5) Exit");
-            System.out.print("Choice: ");
-
-            choice = scanner.nextInt();
-
-            switch (choice) {
-
-                case 1:
-                    updateFills();
-                    break;
-
-                case 2:
-                    buildRoute();
-                    break;
-
-                case 3:
-                    collectWaste();
-                    break;
-
-                case 4:
-                    report();
-                    break;
-
-                case 5:
-                    System.out.println("Exiting Waste Authority...");
-                    break;
-
-                default:
-                    System.out.println("Invalid choice.");
-            }
-
-        } while (choice != 5);
-
-        scanner.close();
+    WasteBin(String area, int waste) {
+        this.area = area;
+        this.waste = waste;
+        this.collected = false;
     }
 
-    // ------------------------------------------------
-    // SAMPLE BIN DATA
-    // ------------------------------------------------
-
-    static void createSampleBins() {
-
-        addBin("B01", "North", "general", 500, 60);
-        addBin("B02", "North", "recycling", 400, 75);
-        addBin("B03", "South", "organic", 600, 45);
-        addBin("B04", "East", "general", 500, 88);
-        addBin("B05", "East", "recycling", 400, 55);
-        addBin("B06", "West", "organic", 600, 65);
-        addBin("B07", "North", "general", 500, 95);
-        addBin("B08", "South", "recycling", 400, 35);
-        addBin("B09", "West", "general", 500, 72);
-        addBin("B10", "East", "organic", 600, 40);
+    public String getArea() {
+        return area;
     }
 
-    static void addBin(String id, String binZone, String binType,
-                       double binCapacity, double fill) {
-
-        if (binCount < MAX_BINS) {
-
-            binId[binCount] = id;
-            zone[binCount] = binZone;
-            type[binCount] = binType;
-            capacity[binCount] = binCapacity;
-            fillLevel[binCount] = fill;
-
-            binCount++;
-        }
+    public int getWaste() {
+        return waste;
     }
 
-    // ------------------------------------------------
-    // W6 - DISTANCE MATRIX
-    // ------------------------------------------------
-
-    static void createDistanceMatrix() {
-
-        for (int i = 0; i < binCount; i++) {
-
-            for (int j = 0; j < binCount; j++) {
-
-                if (i == j) {
-                    distance[i][j] = 0;
-                } else {
-                    // Example distance values
-                    distance[i][j] =
-                            2 + Math.abs(i - j) * 1.2;
-                }
-            }
-        }
+    public void collect() {
+        collected = true;
     }
 
-    // ------------------------------------------------
-    // W1 + W2 + W3
-    // UPDATE BIN FILLS
-    // ------------------------------------------------
-
-    static void updateFills() {
-
-        System.out.print("Enter bin ID: ");
-        String id = scanner.next();
-
-        int index = findBin(id);
-
-        if (index == -1) {
-            System.out.println("Bin not found.");
-            return;
-        }
-
-        System.out.print("Enter new fill percentage: ");
-        double newFill = scanner.nextDouble();
-
-        if (newFill < 0) {
-            System.out.println("Fill cannot be negative.");
-            return;
-        }
-
-        fillLevel[index] = newFill;
-
-        System.out.println(
-                "Updated " + binId[index]
-                        + " fill to " + fillLevel[index] + "%"
-        );
-    }
-
-    // ------------------------------------------------
-    // W3 + W4
-    // BUILD ROUTE
-    // ------------------------------------------------
-
-    static void buildRoute() {
-
-        double threshold = 70.0;
-
-        System.out.println("\nTruck capacity: "
-                + truckCapacity + " L");
-
-        System.out.println("Collection threshold: "
-                + threshold + "%");
-
-        // Temporary route
-        int[] route = new int[MAX_BINS];
-        int routeCount = 0;
-
-        double currentLoad = 0;
-
-        System.out.println("\nPriority bins:");
-
-        // Select bins above threshold
-        for (int i = 0; i < binCount; i++) {
-
-            boolean overflowing = fillLevel[i] > 100;
-
-            if (fillLevel[i] >= threshold || overflowing) {
-
-                double volume =
-                        capacity[i] * fillLevel[i] / 100;
-
-                if (currentLoad + volume <= truckCapacity) {
-
-                    route[routeCount] = i;
-                    routeCount++;
-
-                    currentLoad += volume;
-
-                    System.out.println(
-                            binId[i]
-                            + "(" + fillLevel[i] + "%)"
-                    );
-                }
-            }
-        }
-
-        if (routeCount == 0) {
-            System.out.println("No bins require collection.");
-            return;
-        }
-
-        // W5 - recursive nearest-stop ordering
-        orderRouteRecursively(route, routeCount, 0);
-
-        System.out.println("\nRoute:");
-
-        System.out.print("Depot");
-
-        for (int i = 0; i < routeCount; i++) {
-            System.out.print(" -> " + binId[route[i]]);
-        }
-
-        System.out.println();
-
-        double totalDistance =
-                calculateRouteDistance(route, routeCount);
-
-        System.out.println(
-                "Route distance: "
-                        + totalDistance + " km"
-        );
-
-        System.out.println(
-                "Truck load: "
-                        + currentLoad + " L / "
-                        + truckCapacity + " L"
-        );
-    }
-
-    // ------------------------------------------------
-    // W5 - RECURSIVE NEAREST STOP ORDERING
-    // ------------------------------------------------
-
-    static void orderRouteRecursively(
-            int[] route,
-            int routeCount,
-            int currentPosition) {
-
-        if (currentPosition >= routeCount - 1) {
-            return;
-        }
-
-        int nearestPosition = currentPosition + 1;
-
-        double shortestDistance =
-                distance[route[currentPosition]]
-                        [route[nearestPosition]];
-
-        for (int i = currentPosition + 1;
-             i < routeCount;
-             i++) {
-
-            double currentDistance =
-                    distance[route[currentPosition]]
-                            [route[i]];
-
-            if (currentDistance < shortestDistance) {
-
-                shortestDistance = currentDistance;
-                nearestPosition = i;
-            }
-        }
-
-        // Swap nearest bin
-        int temp = route[currentPosition];
-
-        route[currentPosition] =
-                route[nearestPosition];
-
-        route[nearestPosition] = temp;
-
-        // Recursive call
-        orderRouteRecursively(
-                route,
-                routeCount,
-                currentPosition + 1
-        );
-    }
-
-    // ------------------------------------------------
-    // W6 - CALCULATE ROUTE DISTANCE
-    // ------------------------------------------------
-
-    static double calculateRouteDistance(
-            int[] route,
-            int routeCount) {
-
-        double totalDistance = 0;
-
-        // Depot to first bin
-        if (routeCount > 0) {
-            totalDistance += 2.0;
-        }
-
-        for (int i = 0; i < routeCount - 1; i++) {
-
-            totalDistance +=
-                    distance[route[i]]
-                            [route[i + 1]];
-        }
-
-        // Last bin back to depot
-        if (routeCount > 0) {
-            totalDistance += 2.0;
-        }
-
-        return totalDistance;
-    }
-
-    // ------------------------------------------------
-    // W3 + W4
-    // COLLECT WASTE
-    // ------------------------------------------------
-
-    static void collectWaste() {
-
-        System.out.print("Enter bin ID to collect: ");
-        String id = scanner.next();
-
-        int index = findBin(id);
-
-        if (index == -1) {
-            System.out.println("Bin not found.");
-            return;
-        }
-
-        double volume =
-                capacity[index] *
-                fillLevel[index] / 100;
-
-        if (volume <= 0) {
-            System.out.println("Bin is already empty.");
-            return;
-        }
-
-        totalCollected += volume;
-
-        if (type[index].equals("recycling")) {
-
-            recyclingCollected += volume;
-
-        } else {
-
-            landfillCollected += volume;
-        }
-
-        // Empty the bin
-        fillLevel[index] = 0;
-
-        System.out.println(
-                "Collected " + volume
-                        + " L from " + binId[index]
-        );
-
-        System.out.println(
-                "Bin " + binId[index]
-                        + " is now empty."
-        );
-    }
-
-    // ------------------------------------------------
-    // W1 + W2
-    // REPORT
-    // ------------------------------------------------
-
-    static void report() {
-
-        System.out.println("\n====================================");
-        System.out.println("          WASTE REPORT");
-        System.out.println("====================================");
-
-        System.out.println(
-                "Total collected: "
-                        + totalCollected + " L"
-        );
-
-        System.out.println(
-                "Recycling: "
-                        + recyclingCollected + " L"
-        );
-
-        System.out.println(
-                "Landfill: "
-                        + landfillCollected + " L"
-        );
-
-        double diversionRate = 0;
-
-        if (totalCollected > 0) {
-
-            diversionRate =
-                    recyclingCollected /
-                    totalCollected;
-        }
-
-        System.out.printf(
-                "Diversion rate: %.2f%n",
-                diversionRate
-        );
-
-        System.out.println(
-                "Diversion percentage: "
-                        + (diversionRate * 100) + "%"
-        );
-
-        System.out.println("\nBin Status:");
-
-        for (int i = 0; i < binCount; i++) {
-
-            boolean overflowing =
-                    fillLevel[i] > 100;
-
-            String priority;
-
-            if (overflowing) {
-                priority = "URGENT";
-            } else if (fillLevel[i] >= 70) {
-                priority = "HIGH";
-            } else if (fillLevel[i] >= 50) {
-                priority = "MEDIUM";
-            } else {
-                priority = "LOW";
-            }
-
-            System.out.println(
-                    binId[i]
-                    + " | Zone: " + zone[i]
-                    + " | Type: " + type[i]
-                    + " | Fill: " + fillLevel[i] + "%"
-                    + " | Priority: " + priority
-            );
-        }
-    }
-
-    // ------------------------------------------------
-    // FIND BIN
-    // ------------------------------------------------
-
-    static int findBin(String id) {
-
-        for (int i = 0; i < binCount; i++) {
-
-            if (binId[i].equalsIgnoreCase(id)) {
-                return i;
-            }
-        }
-
-        return -1;
+    public void display() {
+        System.out.println(area + " : " + waste + " kg");
     }
 }
 
+public class WasteOptimizer {
+
+    // CO3: Method
+    static int totalWaste(int[] waste) {
+        int total = 0;
+        for (int x : waste)
+            total += x;
+        return total;
+    }
+
+    // CO3: Recursion
+    static int countBins(int[] waste, int i) {
+        if (i == waste.length)
+            return 0;
+        return 1 + countBins(waste, i + 1);
+    }
+
+    // CO3: Search
+    static int searchBin(int[] waste, int value) {
+        for (int i = 0; i < waste.length; i++) {
+            if (waste[i] == value)
+                return i;
+        }
+        return -1;
+    }
+
+    public static void main(String[] args) {
+
+        Scanner sc = new Scanner(System.in);
+
+        // ================= CO1 =================
+        System.out.println("MUNICIPAL WASTE COLLECTION OPTIMISER");
+
+        System.out.print("Enter waste in Bin 1: ");
+        int w1 = sc.nextInt();
+
+        double capacity = 100.0;
+        double remaining = capacity - w1;
+
+        System.out.println("Remaining capacity: " + remaining + " kg");
+
+        // ================= CO2 =================
+        if (w1 >= 80)
+            System.out.println("Bin 1: URGENT COLLECTION");
+        else if (w1 >= 50)
+            System.out.println("Bin 1: COLLECTION SOON");
+        else
+            System.out.println("Bin 1: NORMAL");
+
+        System.out.print("Enter collection priority (1-3): ");
+        int priority = sc.nextInt();
+
+        switch (priority) {
+            case 1:
+                System.out.println("Priority: High");
+                break;
+            case 2:
+                System.out.println("Priority: Medium");
+                break;
+            case 3:
+                System.out.println("Priority: Low");
+                break;
+            default:
+                System.out.println("Invalid priority");
+        }
+
+        int[] waste = {w1, 60, 90, 45, 75};
+
+        System.out.println("\nWaste levels:");
+        for (int x : waste)
+            System.out.println(x + " kg");
+
+        // ================= CO3 =================
+        System.out.println("\nTotal waste: "
+                + totalWaste(waste) + " kg");
+
+        System.out.println("Number of bins: "
+                + countBins(waste, 0));
+
+        int position = searchBin(waste, 90);
+
+        if (position != -1)
+            System.out.println("90 kg found at bin: " + (position + 1));
+
+        // 2D Array
+        int[][] weeklyWaste = {
+            {40, 50, 60},
+            {70, 80, 90}
+        };
+
+        System.out.println("Weekly waste data:");
+        for (int i = 0; i < weeklyWaste.length; i++) {
+            for (int j = 0; j < weeklyWaste[i].length; j++)
+                System.out.print(weeklyWaste[i][j] + " ");
+            System.out.println();
+        }
+
+        // ================= CO4 =================
+        WasteBin bin1 = new WasteBin("Area A", w1);
+        WasteBin bin2 = new WasteBin("Area B", 90);
+
+        System.out.println("\nBin Objects:");
+        bin1.display();
+        bin2.display();
+
+        bin1.collect();
+
+        // Exception handling
+        try {
+            System.out.print("Enter a test waste value: ");
+            int test = sc.nextInt();
+
+            if (test < 0)
+                throw new IllegalArgumentException("Waste cannot be negative");
+
+            System.out.println("Valid waste value.");
+        } catch (InputMismatchException e) {
+            System.out.println("Please enter a number.");
+        } catch (IllegalArgumentException e) {
+            System.out.println(e.getMessage());
+        }
+
+        // ================= CO5 =================
+        String area = "Municipal Area A";
+
+        StringBuilder report = new StringBuilder();
+        report.append("Waste Collection Report\n");
+        report.append(area).append("\n");
+        report.append("Total Waste: ")
+              .append(totalWaste(waste))
+              .append(" kg\n");
+
+        System.out.println("\n" + report);
+
+        // Sorting
+        Arrays.sort(waste);
+
+        System.out.println("Sorted waste:");
+        for (int x : waste)
+            System.out.print(x + " ");
+
+        // File writing
+        try {
+            FileWriter file = new FileWriter("waste.txt");
+            file.write(report.toString());
+            file.close();
+
+            System.out.println("\nData saved to file.");
+
+            // File reading
+            BufferedReader reader =
+                    new BufferedReader(new FileReader("waste.txt"));
+
+            System.out.println("File content:");
+            String line;
+
+            while ((line = reader.readLine()) != null)
+                System.out.println(line);
+
+            reader.close();
+
+        } catch (IOException e) {
+            System.out.println("File error.");
+        }
+
+        // ================= CO6 =================
+        ArrayList<Integer> wasteList = new ArrayList<>();
+
+        for (int x : waste)
+            wasteList.add(x);
+
+        System.out.println("\nHigh waste bins:");
+
+        wasteList.stream()
+                .filter(x -> x >= 80)
+                .forEach(x -> System.out.println(x + " kg"));
+
+        int total = wasteList.stream()
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        System.out.println("Stream total: " + total + " kg");
+
+        sc.close();
+    }
+}
+
+                    
+
+        
 
